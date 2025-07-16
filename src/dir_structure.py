@@ -1,6 +1,20 @@
 import os
 import sys
 
+# 配置部分：你可以根据需要修改这些列表
+EXCLUDE_DIRS = ['__pycache__', '.git', 'venv', '.idea', 'node_modules']  # 要忽略的目录名
+INCLUDE_EXTENSIONS =None # 只显示这些扩展名的文件，设为 None 则显示所有文件
+
+def should_exclude_dir(dirname):
+    """判断是否应该忽略该目录"""
+    return dirname in EXCLUDE_DIRS
+
+def should_include_file(filename):
+    """判断是否应该包含该文件"""
+    if INCLUDE_EXTENSIONS is None:
+        return True  # 如果为 None，则包含所有文件
+    return any(filename.endswith(ext) for ext in INCLUDE_EXTENSIONS)
+
 def generate_directory_tree(startpath):
     """
     递归生成目录树结构，返回字符串
@@ -9,7 +23,6 @@ def generate_directory_tree(startpath):
         """
         内部递归函数，用于构建树状结构
         """
-        # 获取当前目录下的所有文件和子目录
         entries = sorted(os.listdir(dirpath))
         pointers = ['├── '] * (len(entries) - 1) + ['└── ']
         result = []
@@ -17,12 +30,14 @@ def generate_directory_tree(startpath):
         for pointer, entry in zip(pointers, entries):
             full_path = os.path.join(dirpath, entry)
             if os.path.isdir(full_path):
-                # 如果是目录，递归调用
+                if should_exclude_dir(entry):  # 如果是要忽略的目录，则跳过
+                    continue
                 result.append(prefix + pointer + entry + '/')
-                result.append(_tree(full_path, prefix + '    '))
+                result.append(_tree(full_path, prefix + '|   '))
             else:
-                # 如果是文件
-                result.append(prefix + pointer + entry)
+                if should_include_file(entry):  # 如果文件符合条件，则加入
+                    result.append(prefix + pointer + entry)
+                # 否则跳过该文件
 
         return '\n'.join(result)
 
