@@ -2,7 +2,7 @@ import os
 import sys
 
 # 配置部分：你可以根据需要修改这些列表
-EXCLUDE_DIRS = ['__pycache__', '.git', 'venv', '.idea', 'node_modules']  # 要忽略的目录名
+EXCLUDE_DIRS = ['__pycache__', '.git', 'venv', '.idea', 'node_modules','uni-modules','uview-ui']  # 要忽略的目录名
 INCLUDE_EXTENSIONS =None # 只显示这些扩展名的文件，设为 None 则显示所有文件
 
 def should_exclude_dir(dirname):
@@ -23,7 +23,7 @@ def generate_directory_tree(startpath):
         """
         内部递归函数，用于构建树状结构
         """
-        entries = sorted(os.listdir(dirpath))
+        entries = os.listdir(dirpath)
         pointers = ['├── '] * (len(entries) - 1) + ['└── ']
         result = []
 
