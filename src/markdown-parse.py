@@ -240,8 +240,8 @@ class MarkdownToCourseConverter:
         write_files(structure)
 
     def update_categories_json(self, category_name, course_name):
-        saved_dir_base = r'F:\eclipse\worakjava\vite-blog\public\assets\md'
-        categories_path = r'F:\eclipse\worakjava\vite-blog\public\assets\categories.json'
+        saved_dir_base = r'D:\project\vite-blog\public\assets\md'
+        categories_path = r'D:\project\vite-blog\public\assets\categories.json'
 
         with open(categories_path, encoding='utf-8', mode='r+') as f:
             res = json.load(f)
