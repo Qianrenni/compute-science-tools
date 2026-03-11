@@ -5,7 +5,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -32,7 +31,23 @@ console_formatter = logging.Formatter(
 )
 console_handler.setFormatter(console_formatter)
 logger.addHandler(console_handler)
-
+allow_file_extensions = [
+    '.txt',
+    '.doc',
+    '.docx',
+    '.pdf',
+    '.xlsx',
+    '.pptx',
+    '.md',
+    '.csv',
+    '.json',
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.webp',
+    '.mp4',
+]
 # === 密码派生 ===
 def derive_key(password: str, salt: bytes) -> bytes:
     kdf = PBKDF2HMAC(
@@ -93,7 +108,7 @@ def collect_files(input_path: Path, is_encrypt: bool) -> List[Path]:
     if input_path.is_dir():
         if is_encrypt:
             return [p for p in input_path.rglob('*') 
-                    if p.is_file() and not p.name.startswith('.')]
+                    if p.is_file() and not p.name.startswith('.') and p.suffix in allow_file_extensions]
         else:
             return [p for p in input_path.rglob('*.enc') 
                     if p.is_file() and not p.name.startswith('.')]
@@ -126,42 +141,46 @@ async def process_files(
 
     successes: List[Path] = []
     failures: List[Tuple[Path, str]] = []
+    
+    # 使用信号量控制并发数
+    semaphore = asyncio.Semaphore(max_workers)
 
     async def process_single_file(idx: int, file_path: Path):
-        logger.info(f"[{idx+1}/{total}] 正在处理: {file_path}")
-        try:
-            if is_encrypt:
-                original_suffix = file_path.suffix
-                out_name = f"{uuid.uuid4()}{original_suffix}.enc"
-                out_path = output_dir / out_name
-                await asyncio.get_running_loop().run_in_executor(
-                    executor, _encrypt_file_sync, password, file_path, out_path
-                )
-                successes.append(out_path)
-                logger.debug(f"[✓] 已加密: {file_path.name} -> {out_name}")
-            else:
-                if file_path.suffix != '.enc':
-                    raise ValueError("跳过非.enc文件")
-                stem_with_ext = file_path.stem
-                out_path = output_dir / stem_with_ext
-                await asyncio.get_running_loop().run_in_executor(
-                    executor, _decrypt_file_sync, password, file_path, out_path
-                )
-                successes.append(out_path)
-                logger.debug(f"[✓] 已解密: {file_path.name} -> {stem_with_ext}")
-            logger.info(f"[{idx+1}/{total}] 处理完成: {file_path}")
-        except Exception as e:
-            failures.append((file_path, str(e)))
-            logger.error(f"[✗] 处理失败 {file_path.name}: {e}")
+        async with semaphore:
+            logger.info(f"[{idx+1}/{total}] 正在处理：{file_path}")
+            try:
+                if is_encrypt:
+                    original_suffix = file_path.suffix
+                    out_name = f"{uuid.uuid4()}{original_suffix}.enc"
+                    out_path = output_dir / out_name
+                    await asyncio.get_running_loop().run_in_executor(
+                        None, _encrypt_file_sync, password, file_path, out_path
+                    )
+                    successes.append(out_path)
+                    logger.debug(f"[✓] 已加密：{file_path.name} -> {out_name}")
+                else:
+                    if file_path.suffix != '.enc':
+                        raise ValueError("跳过非.enc 文件")
+                    stem_with_ext = file_path.stem
+                    out_path = output_dir / stem_with_ext
+                    await asyncio.get_running_loop().run_in_executor(
+                        None, _decrypt_file_sync, password, file_path, out_path
+                    )
+                    successes.append(out_path)
+                    logger.debug(f"[✓] 已解密：{file_path.name} -> {stem_with_ext}")
+                logger.info(f"[{idx+1}/{total}] 处理完成：{file_path}")
+            except Exception as e:
+                failures.append((file_path, str(e)))
+                logger.error(f"[✗] 处理失败 {file_path.name}: {e}")
 
-    # 创建线程池执行器
-    executor = ThreadPoolExecutor(max_workers=max_workers)
-    try:
-        tasks = [process_single_file(i, f) for i, f in enumerate(files)]
-        await asyncio.gather(*tasks)
-        return successes, failures
-    finally:
-        executor.shutdown(wait=True)
+    # 创建任务并并发执行
+    tasks = [
+        process_single_file(i, f) 
+        for i, f in enumerate(files)
+    ]
+    await asyncio.gather(*tasks)
+    
+    return successes, failures
 
 # === 主函数 ===
 async def main():
