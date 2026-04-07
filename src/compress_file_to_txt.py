@@ -18,14 +18,16 @@ def compress_file_to_text(
         return
     logger.info(f'文件拓展名: {file_extension}')
     out_file = input_dir / "compressed.txt"
+    contents = []
     for file_ext in file_extension:
         for file_path in input_dir.glob(f"*.{file_ext}"):
             if file_path.is_file():
                 logger.info(f"正在处理文件: {file_path}")
                 with file_path.open("r", encoding="utf-8") as f:
                     content = f.read()
-                    out_file.write_text(content)
+                    contents.append(content)
     
+    out_file.write_text('\n'.join(contents),encoding='utf-8')
     logger.info(f"压缩文件已保存到: {out_file}")
 
 def get_args():
